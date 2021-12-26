@@ -3,7 +3,9 @@
     "choo": "^7.1.0",
     "earcut": "^2.2.3",
     "glsl-proj4": "^1.5.1",
+    "martinez-polygon-clipping": "^0.7.1",
     "pclip": "^1.4.0",
+    "polygon-clipping": "^0.15.3",
     "polyline-normals": "^2.0.2",
     "regl": "^2.1.0"
   },

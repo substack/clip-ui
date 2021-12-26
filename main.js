@@ -5,9 +5,6 @@ var regl = require('regl')
 var earcut = require('earcut')
 var pnormals = require('polyline-normals')
 
-var pclip = require('pclip')
-var pclipOpts = { xy: require('pclip/xy'), geo: require('pclip/geo') }
-
 app.use(function (state, emitter) {
   state.canvas = document.createElement('canvas')
   state.canvas.width = window.innerWidth
@@ -148,13 +145,18 @@ app.use(function (state, emitter) {
 })
 
 app.use(function (state, emitter) {
-  //state.algorithms = ['pclip/xy', 'pclip/geo', 'martinez', 'polygon-clipping']
-  state.algorithms = ['pclip/xy']
-  state.methods = ['union','intersect','difference','exclude','divide','none']
+  var algorithms = state.algorithms = require('./lib/algorithms.js')
+  state.algorithmList = [
+    { display: 'pclip/xy', key: 'pclipXY' },
+    { display: 'martinez', key: 'martinez' },
+    { display: 'polygon-clipping', key: 'polygonClipping' },
+  ]
+
+  state.methods = ['union','intersect','difference','exclude','none']
   //state.views = ['globe','cylindrical','cartesian']
   state.views = ['cartesian']
   state.selected = {
-    algorithm: 'pclip/xy',
+    algorithm: state.algorithmList[0].key,
     method: 'union',
     view: 'cartesian',
   }
@@ -197,7 +199,16 @@ app.use(function (state, emitter) {
   })
   if (location.hash.length > 1) {
     var hdata = JSON.parse(atob(decodeURIComponent(location.hash.slice(1))))
-    if (hdata.a) state.selected.algorithm = hdata.a
+    if (hdata.a) {
+      for (var i = 0; i < state.algorithmList.length; i++) {
+        var a = state.algorithmList[i]
+        if (a.display === hdata.a) {
+          hdata.a = a.key
+          break
+        }
+      }
+      state.selected.algorithm = hdata.a
+    }
     if (hdata.m) state.selected.method = hdata.m
     if (hdata.v) state.selected.view = hdata.v
     if (hdata.A) state.data.A = hdata.A
@@ -229,11 +240,10 @@ app.use(function (state, emitter) {
     var A = state.data.A = JSON.parse(state.input.A)
     var B = state.data.B = JSON.parse(state.input.B)
     var opts = null
-    if (state.selected.algorithm === 'pclip/xy') opts = pclipOpts.xy
-    if (state.selected.algorithm === 'pclip/geo') opts = pclipOpts.geo
+    var clip = state.algorithms[state.selected.algorithm]
     var C = state.selected.method === 'none'
       ? []
-      : pclip[state.selected.method](A, B, opts)
+      : clip[state.selected.method](A, B)
     var bbox = state.view.cartesian.viewbox = [Infinity,Infinity,-Infinity,-Infinity]
     var mA = toMulti(A), mB = toMulti(B)
     setSolid(state.props.solid[0], bbox, mA)
@@ -391,10 +401,10 @@ app.route('*', function (state, emit) {
     ${state.canvas}
     <div class="buttons">
       <div class="options">
-        ${state.algorithms.map(a => html`<button
-          class=${state.selected.algorithm === a ? 'selected' : ''}
-          onclick=${() => emit('set-algorithm', a)}
-        >${a}</button>`)}
+        ${state.algorithmList.map(a => html`<button
+          class=${state.selected.algorithm === a.key ? 'selected' : ''}
+          onclick=${() => emit('set-algorithm', a.key)}
+        >${a.display}</button>`)}
       </div>
       <div class="options">
         ${state.methods.map(m => html`<button
