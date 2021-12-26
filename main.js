@@ -164,23 +164,49 @@ app.use(function (state, emitter) {
   }
   emitter.on('set-algorithm', function (a) {
     state.selected.algorithm = a
+    emitter.emit('update-hash')
     emitter.emit('render')
     emitter.emit('calculate')
   })
   emitter.on('set-method', function (m) {
     state.selected.method = m
+    emitter.emit('update-hash')
     emitter.emit('render')
     emitter.emit('calculate')
   })
   emitter.on('set-view', function (v) {
     state.selected.view = v
+    emitter.emit('update-hash')
     emitter.emit('render')
     emitter.emit('calculate')
   })
 
+  state.data = {
+    A: [[0,0],[5,8],[10,0]],
+    B: [[5,4],[10,12],[10,4]],
+  }
+
+  emitter.on('update-hash', function () {
+    location.hash = btoa(JSON.stringify({
+      a: state.selected.algorithm,
+      m: state.selected.method,
+      v: state.selected.cartesian,
+      A: state.data.A,
+      B: state.data.B,
+    }))
+  })
+  if (location.hash.length > 1) {
+    var hdata = JSON.parse(atob(decodeURIComponent(location.hash.slice(1))))
+    if (hdata.a) state.selected.algorithm = hdata.a
+    if (hdata.m) state.selected.method = hdata.m
+    if (hdata.v) state.selected.view = hdata.v
+    if (hdata.A) state.data.A = hdata.A
+    if (hdata.B) state.data.B = hdata.B
+  }
+
   state.input = {
-    A: '[[0,0],[5,8],[10,0]]',
-    B: '[[5,4],[10,12],[10,4]]'
+    A: JSON.stringify(state.data.A),
+    B: JSON.stringify(state.data.B),
   }
   state.result = '[]'
   state.timer = null
@@ -194,8 +220,8 @@ app.use(function (state, emitter) {
     }
   })
   emitter.on('calculate', function () {
-    var A = JSON.parse(state.input.A)
-    var B = JSON.parse(state.input.B)
+    var A = state.data.A = JSON.parse(state.input.A)
+    var B = state.data.B = JSON.parse(state.input.B)
     var opts = null
     if (state.selected.algorithm === 'pclip/xy') opts = pclipOpts.xy
     if (state.selected.algorithm === 'pclip/geo') opts = pclipOpts.geo
@@ -209,6 +235,7 @@ app.use(function (state, emitter) {
     setLine(state.props.line[1], mB)
     setLine(state.props.line[2], C)
     state.result = JSON.stringify(C)
+    emitter.emit('update-hash')
     emitter.emit('render')
     emitter.emit('frame')
   })
