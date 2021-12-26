@@ -64,9 +64,9 @@ app.use(function (state, emitter) {
     state.regl.poll()
     state.regl.clear({ color: [0,0,0,1], depth: true })
     state.draw.solid(state.props.solid.slice(0,2))
-    state.draw.solid(state.props.solid[2])
+    if (state.props.solid[2].positions.length > 0) state.draw.solid(state.props.solid[2])
     state.draw.line(state.props.line.slice(0,2))
-    state.draw.line(state.props.line[2])
+    if (state.props.line[2].positions.length > 0) state.draw.line(state.props.line[2])
   })
   state.draw.solid = state.regl({
     frag: `
@@ -150,7 +150,7 @@ app.use(function (state, emitter) {
 app.use(function (state, emitter) {
   //state.algorithms = ['pclip/xy', 'pclip/geo', 'martinez', 'polygon-clipping']
   state.algorithms = ['pclip/xy']
-  state.methods = ['union','intersect','difference','exclude','divide']
+  state.methods = ['union','intersect','difference','exclude','divide','none']
   //state.views = ['globe','cylindrical','cartesian']
   state.views = ['cartesian']
   state.selected = {
@@ -225,7 +225,9 @@ app.use(function (state, emitter) {
     var opts = null
     if (state.selected.algorithm === 'pclip/xy') opts = pclipOpts.xy
     if (state.selected.algorithm === 'pclip/geo') opts = pclipOpts.geo
-    var C = pclip[state.selected.method](A, B, opts)
+    var C = state.selected.method === 'none'
+      ? []
+      : pclip[state.selected.method](A, B, opts)
     var bbox = state.view.cartesian.viewbox = [Infinity,Infinity,-Infinity,-Infinity]
     var mA = toMulti(A), mB = toMulti(B)
     setSolid(state.props.solid[0], bbox, mA)

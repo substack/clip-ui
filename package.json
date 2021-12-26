@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "choo": "^7.1.0",
+    "earcut": "^2.2.3",
+    "glsl-proj4": "^1.5.1",
+    "pclip": "^1.4.0",
+    "polyline-normals": "^2.0.2",
+    "regl": "^2.1.0"
+  },
+  "devDependencies": {
+    "budo": "^11.6.4"
+  },
+  "scripts": {
+    "start": "budo main.js"
+  }
+}
