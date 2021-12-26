@@ -204,6 +204,12 @@ app.use(function (state, emitter) {
     if (hdata.B) state.data.B = hdata.B
   }
 
+  state.visible = { inputs: true }
+  emitter.on('visible-toggle', function (key) {
+    state.visible[key] = !state.visible[key]
+    emitter.emit('render')
+  })
+
   state.input = {
     A: JSON.stringify(state.data.A),
     B: JSON.stringify(state.data.B),
@@ -324,7 +330,7 @@ app.route('*', function (state, emit) {
         padding-right: 1em;
         z-index: 100;
       }
-      .options button {
+      button {
         margin-right: 0.5ex;
         margin-bottom: 0.5em;
         border: 1px solid white;
@@ -345,6 +351,7 @@ app.route('*', function (state, emit) {
         left: 0px;
         right: 0px;
         z-index: 100;
+        padding-left: 1ex;
       }
       .inputs textarea {
         width: calc(100% - 7ex);
@@ -371,6 +378,15 @@ app.route('*', function (state, emit) {
         padding-bottom: 1em;
         margin-right: 1ex;
       }
+      .toggle-inputs {
+        position: absolute;
+        left: 1ex;
+        bottom: 0px;
+        z-index: 101;
+      }
+      .hide {
+        display: none;
+      }
     </style>
     ${state.canvas}
     <div class="buttons">
@@ -393,7 +409,7 @@ app.route('*', function (state, emit) {
         >${v}</button>`)}
       </div>
     </div>
-    <div class="inputs">
+    <div class="inputs ${state.visible.inputs ? '' : 'hide'}">
       <div class="input A">
         <div class="label">A</div>
         <textarea oninput=${oninput('A')}>${state.input.A}</textarea>
@@ -407,6 +423,9 @@ app.route('*', function (state, emit) {
         <textarea oninput=${oninput('C')}>${state.result}</textarea>
       </div>
     </div>
+    <button class="toggle-inputs"
+      onclick=${() => emit('visible-toggle', 'inputs')}
+    >${state.visible.inputs ? '\u25bc' : '\u25b2'}</button>
   </body>`
   function oninput(key) {
     return function (ev) {
