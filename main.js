@@ -183,37 +183,78 @@ app.use(function (state, emitter) {
     emitter.emit('calculate')
   })
 
-  state.data = {
-    A: [[0,0],[5,8],[10,0]],
-    B: [[5,4],[10,12],[10,4]],
-  }
-
+  state.skipFirstHash = false
+  state.firstHash = true
   emitter.on('update-hash', function () {
-    location.hash = btoa(JSON.stringify({
-      a: state.selected.algorithm,
-      m: state.selected.method,
-      v: state.selected.cartesian,
-      A: state.data.A,
-      B: state.data.B,
-    }))
-  })
-  if (location.hash.length > 1) {
-    var hdata = JSON.parse(atob(decodeURIComponent(location.hash.slice(1))))
-    if (hdata.a) {
-      for (var i = 0; i < state.algorithmList.length; i++) {
-        var a = state.algorithmList[i]
-        if (a.display === hdata.a) {
-          hdata.a = a.key
-          break
-        }
-      }
-      state.selected.algorithm = hdata.a
+    var firstHash = state.firstHash
+    state.firstHash = false
+    if (state.skipFirstHash && firstHash) return
+    if (state.dataURL) {
+      location.hash = ''
+        + '?a=' + encodeURIComponent(state.selected.algorithm)
+        + '&m=' + encodeURIComponent(state.selected.method)
+        + '&v=' + encodeURIComponent(state.selected.view)
+        + '&u=' + state.dataURL
+    } else {
+      location.hash = btoa(JSON.stringify({
+        a: state.selected.algorithm,
+        m: state.selected.method,
+        v: state.selected.view,
+        A: state.data.A,
+        B: state.data.B,
+      }))
     }
-    if (hdata.m) state.selected.method = hdata.m
-    if (hdata.v) state.selected.view = hdata.v
-    if (hdata.A) state.data.A = hdata.A
-    if (hdata.B) state.data.B = hdata.B
-  }
+  })
+  state.data = { A: [], B: [] }
+  state.input = { A: '[]', B: '[]' }
+  state.dataURL = null
+
+  ;(async function () {
+    if (location.hash.length > 1) {
+      var hdata = null
+      if (/^#\?/.test(location.hash)) {
+        var q = new URLSearchParams(location.hash.slice(2))
+        var u = q.get('u')
+        if (u) {
+          state.dataURL = u
+          state.skipFirstHash = true
+          var src = await (await fetch(u)).text()
+          hdata = JSON.parse(atob(decodeURIComponent(src)))
+        }
+        if (q.get('a')) hdata.a = q.get('a')
+        if (q.get('m')) hdata.m = q.get('m')
+        if (q.get('v')) hdata.v = q.get('v')
+        if (q.get('A')) hdata.A = q.get('A')
+        if (q.get('B')) hdata.B = q.get('B')
+      } else {
+        hdata = JSON.parse(atob(decodeURIComponent(location.hash.slice(1))))
+      }
+      if (hdata.a) {
+        for (var i = 0; i < state.algorithmList.length; i++) {
+          var a = state.algorithmList[i]
+          if (a.display === hdata.a) {
+            hdata.a = a.key
+            break
+          }
+        }
+        state.selected.algorithm = hdata.a
+      }
+      if (hdata.m) state.selected.method = hdata.m
+      if (hdata.v) state.selected.view = hdata.v
+      if (hdata.A) state.data.A = hdata.A
+      if (hdata.B) state.data.B = hdata.B
+    } else {
+      state.data = {
+        A: [[0,0],[5,8],[10,0]],
+        B: [[5,4],[10,12],[10,4]],
+      }
+    }
+    state.input.A = JSON.stringify(state.data.A)
+    state.input.B = JSON.stringify(state.data.B)
+    process.nextTick(function () {
+      emitter.emit('calculate')
+    })
+  })()
 
   state.visible = { inputs: true }
   emitter.on('visible-toggle', function (key) {
@@ -228,7 +269,9 @@ app.use(function (state, emitter) {
   state.result = '[]'
   state.timer = null
   emitter.on('set-input', function (key, value) {
+    if (value === state.input[key]) return
     state.input[key] = value
+    state.dataURL = null
     if (!state.timer) {
       state.timer = setTimeout(function () {
         state.timer = null
@@ -256,9 +299,6 @@ app.use(function (state, emitter) {
     emitter.emit('update-hash')
     emitter.emit('render')
     emitter.emit('frame')
-  })
-  process.nextTick(function () {
-    emitter.emit('calculate')
   })
 
   function setSolid(out, bbox, X) {
