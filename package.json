@@ -10,9 +10,12 @@
     "regl": "^2.1.0"
   },
   "devDependencies": {
-    "budo": "^11.6.4"
+    "budo": "^11.6.4",
+    "browserify": "17.0.0",
+    "indexhtmlify": "^2.0.1"
   },
   "scripts": {
-    "start": "budo main.js"
+    "start": "budo main.js",
+    "build": "browserify main.js | indexhtmlify --title clip > clip.html"
   }
 }
