@@ -3,6 +3,7 @@ var html = require('choo/html')
 
 var regl = require('regl')
 var earcut = require('earcut')
+var pnormals = require('polyline-normals')
 
 var pclip = require('pclip')
 var pclipOpts = { xy: require('pclip/xy'), geo: require('pclip/geo') }
@@ -38,12 +39,34 @@ app.use(function (state, emitter) {
       color: [0.5,0,0.5,0.9]
     },
   ]
+  state.props.line = [
+    {
+      positions: [],
+      normals: [],
+      color: [1,0,0,1],
+      nOffset: 0,
+    },
+    {
+      positions: [],
+      normals: [],
+      color: [0.5,0.5,1,1],
+      nOffset: 0,
+    },
+    {
+      positions: [],
+      normals: [],
+      color: [1,1,1,1],
+      nOffset: 0,
+    },
+  ]
   state.draw = {}
   emitter.on('frame', function () {
     state.regl.poll()
     state.regl.clear({ color: [0,0,0,1], depth: true })
     state.draw.solid(state.props.solid.slice(0,2))
     state.draw.solid(state.props.solid[2])
+    state.draw.line(state.props.line.slice(0,2))
+    state.draw.line(state.props.line[2])
   })
   state.draw.solid = state.regl({
     frag: `
@@ -78,6 +101,49 @@ app.use(function (state, emitter) {
       enable: true,
       func: { src: 'src alpha', dst: 'one minus src alpha' },
     },
+  })
+  var nOffset = [0,0]
+  state.draw.line = state.regl({
+    frag: `
+      precision highp float;
+      uniform vec4 color;
+      void main() {
+        gl_FragColor = color;
+      }
+    `,
+    vert: `
+      precision highp float;
+      attribute vec2 position, normal;
+      uniform vec4 viewbox;
+      uniform vec2 nOffset;
+      void main() {
+        vec2 p = vec2(
+          (position.x-viewbox[0])/(viewbox[2]-viewbox[0]),
+          (position.y-viewbox[1])/(viewbox[3]-viewbox[1])
+        )*2.0-1.0;
+        gl_Position = vec4(p*0.8+normal*nOffset,0,1);
+      }
+    `,
+    attributes: {
+      position: state.regl.prop('positions'),
+      normal: state.regl.prop('normals'),
+    },
+    uniforms: {
+      color: state.regl.prop('color'),
+      nOffset: (context,props) => {
+        nOffset[0] = props.nOffset/window.innerWidth
+        nOffset[1] = props.nOffset/window.innerHeight
+        return nOffset
+      },
+      viewbox: () => state.view.cartesian.viewbox,
+    },
+    primitive: 'lines',
+    depth: { enable: false, mask: false },
+    blend: {
+      enable: true,
+      func: { src: 'src alpha', dst: 'one minus src alpha' },
+    },
+    count: (context, props) => props.positions.length/2,
   })
 })
 
@@ -135,9 +201,13 @@ app.use(function (state, emitter) {
     if (state.selected.algorithm === 'pclip/geo') opts = pclipOpts.geo
     var C = pclip[state.selected.method](A, B, opts)
     var bbox = state.view.cartesian.viewbox = [Infinity,Infinity,-Infinity,-Infinity]
-    setSolid(state.props.solid[0], bbox, toMulti(A))
-    setSolid(state.props.solid[1], bbox, toMulti(B))
+    var mA = toMulti(A), mB = toMulti(B)
+    setSolid(state.props.solid[0], bbox, mA)
+    setSolid(state.props.solid[1], bbox, mB)
     setSolid(state.props.solid[2], bbox, C)
+    setLine(state.props.line[0], mA)
+    setLine(state.props.line[1], mB)
+    setLine(state.props.line[2], C)
     state.result = JSON.stringify(C)
     emitter.emit('render')
     emitter.emit('frame')
@@ -170,6 +240,25 @@ app.use(function (state, emitter) {
       }
     }
   }
+
+  function setLine(out, X) {
+    out.positions = []
+    out.normals = []
+    for (var i = 0; i < X.length; i++) {
+      for (var j = 0; j < X[i].length; j++) {
+        var l = X[i][j].length
+        var normals = pnormals(X[i][j],true)
+        for (var k = 0; k < l; k++) {
+          var x0 = X[i][j][k][0], y0 = X[i][j][k][1]
+          var x1 = X[i][j][(k+1)%l][0], y1 = X[i][j][(k+1)%l][1]
+          out.positions.push(x0, y0, x1, y1)
+          var nx = normals[k][0][0], ny = normals[k][0][1], nl = Math.sqrt(normals[k][1])
+          out.normals.push(nx/nl,ny/nl,nx/nl,ny/nl)
+        }
+      }
+    }
+  }
+
   function toMulti(x) {
     var d = getDepth(x)
     if (d === 2) return [[x]]
