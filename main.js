@@ -360,9 +360,10 @@ app.use(function (state, emitter) {
     setLine(state.props.line[1], mB)
     setLine(state.props.line[2], C)
     state.result = JSON.stringify(C)
-    state.resultElement.value = state.result
     emitter.emit('update-hash')
     emitter.emit('frame')
+    emitter.emit('render')
+    emitter.emit('refocus')
   })
 
   function setSolid(out, bbox, X) {
@@ -421,8 +422,30 @@ app.use(function (state, emitter) {
   }
 })
 
+app.use(function (state, emitter) {
+  state.focus = null
+  emitter.on('set-focus', function (element) {
+    state.focus = element
+  })
+  emitter.on('refocus', function () {
+    process.nextTick(() => {
+      if (state.focus) state.focus.focus()
+      state.focus = null
+    })
+  })
+})
+
 app.route('*', function (state, emit) {
-  state.resultElement = html`<textarea oninput=${oninput('C')}>${state.result}</textarea>`
+  if (state.A) {
+    state.A.value = state.input.A
+  } else {
+    state.A = html`<textarea oninput=${oninput('A')}>${state.input.A}</textarea>`
+  }
+  if (state.B) {
+    state.B.value = state.input.B
+  } else {
+    state.B = html`<textarea oninput=${oninput('B')}>${state.input.B}</textarea>`
+  }
   return html`<body>
     <style>
       body {
@@ -532,23 +555,25 @@ app.route('*', function (state, emit) {
       ${state.errorElement}
       <div class="input A">
         <div class="label">A</div>
-        <textarea oninput=${oninput('A')}>${state.input.A}</textarea>
+        ${state.A}
       </div>
       <div class="input B">
         <div class="label">B</div>
-        <textarea oninput=${oninput('B')}>${state.input.B}</textarea>
+        ${state.B}
       </div>
       <div class="input C">
         <div class="label">C</div>
-        ${state.resultElement}
+        <textarea>${state.result}</textarea>
       </div>
     </div>
     <button class="toggle-inputs"
       onclick=${() => emit('visible-toggle', 'inputs')}
     >${state.visible.inputs ? '\u25bc' : '\u25b2'}</button>
   </body>`
+
   function oninput(key) {
     return function (ev) {
+      emit('set-focus', ev.target)
       emit('set-input', key, ev.target.value)
     }
   }
