@@ -180,7 +180,7 @@ app.use(function (state, emitter) {
     { display: 'pclip/xy', key: 'pclipXY' },
     { display: 'martinez', key: 'martinez' },
     { display: 'polygon-clipping', key: 'polygonClipping' },
-  ].map(a => Object.assign(a, { version: algorithms[a.key].version }))
+  ].map(a => Object.assign(a, { pkg: algorithms[a.key].pkg }))
 
   state.methods = ['union','intersect','difference','exclude','none']
   //state.views = ['globe','cylindrical','cartesian']
@@ -536,7 +536,7 @@ app.route('*', function (state, emit) {
         ${state.algorithmList.map(a => html`<button
           class=${state.selected.algorithm === a.key ? 'selected' : ''}
           onclick=${() => emit('set-algorithm', a.key)}
-          title="${a.display}@${a.version}"
+          title="${a.pkg}"
         >${a.display}</button>`)}
       </div>
       <div class="options">
