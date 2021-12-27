@@ -162,6 +162,7 @@ app.use(function (state, emitter) {
   state.errorElement = html`<div class="errors hide"></div>`
   emitter.on('error', function (e) {
     state.errors.push(e)
+    console.error(e)
     state.errorElement.appendChild(html`<div>${String(e)}</div>`)
     state.errorElement.classList.remove('hide')
   })
