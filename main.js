@@ -4,6 +4,7 @@ var html = require('choo/html')
 var regl = require('regl')
 var earcut = require('earcut')
 var pnormals = require('polyline-normals')
+var fixDepth = require('./lib/fix-depth.js')
 
 app.use(function (state, emitter) {
   state.canvas = document.createElement('canvas')
@@ -56,6 +57,18 @@ app.use(function (state, emitter) {
       nOffset: 0,
     },
   ]
+  emitter.on('props:clear', function () {
+    state.props.solid[0].positions = []
+    state.props.solid[1].positions = []
+    state.props.solid[2].positions = []
+    state.props.line[0].positions = []
+    state.props.line[1].positions = []
+    state.props.line[2].positions = []
+    state.props.line[0].normals = []
+    state.props.line[1].normals = []
+    state.props.line[2].normals = []
+  })
+
   state.draw = {}
   emitter.on('frame', function () {
     state.regl.poll()
@@ -145,6 +158,22 @@ app.use(function (state, emitter) {
 })
 
 app.use(function (state, emitter) {
+  state.errors = []
+  state.errorElement = html`<div class="errors hide"></div>`
+  emitter.on('error', function (e) {
+    state.errors.push(e)
+    state.errorElement.appendChild(html`<div>${String(e)}</div>`)
+    state.errorElement.classList.remove('hide')
+  })
+  emitter.on('error:clear', function (e) {
+    state.errors = []
+    ;[].slice.call(state.errorElement.children).forEach(function (c) {
+      state.errorElement.removeChild(c)
+    })
+  })
+})
+
+app.use(function (state, emitter) {
   var algorithms = state.algorithms = require('./lib/algorithms.js')
   state.algorithmList = [
     { display: 'pclip/xy', key: 'pclipXY' },
@@ -166,18 +195,22 @@ app.use(function (state, emitter) {
   }
   emitter.on('set-algorithm', function (a) {
     state.selected.algorithm = a
+    emitter.emit('error:clear')
     emitter.emit('update-hash')
     emitter.emit('render')
     emitter.emit('calculate')
   })
   emitter.on('set-method', function (m) {
     state.selected.method = m
+    emitter.emit('error:clear')
     emitter.emit('update-hash')
     emitter.emit('render')
     emitter.emit('calculate')
   })
   emitter.on('set-view', function (v) {
     state.selected.view = v
+    emitter.emit('clear-props')
+    emitter.emit('error:clear')
     emitter.emit('update-hash')
     emitter.emit('render')
     emitter.emit('calculate')
@@ -219,7 +252,13 @@ app.use(function (state, emitter) {
           state.dataURL = u
           state.skipFirstHash = true
           var src = await (await fetch(u)).text()
-          hdata = JSON.parse(atob(decodeURIComponent(src)))
+          try {
+            hdata = JSON.parse(atob(decodeURIComponent(src)))
+          } catch (e) {
+            emitter.emit('error', new Error('failed to decode remote data'))
+            console.error(e)
+            return
+          }
         }
         if (q.get('a')) hdata.a = q.get('a')
         if (q.get('m')) hdata.m = q.get('m')
@@ -227,7 +266,13 @@ app.use(function (state, emitter) {
         if (q.get('A')) hdata.A = q.get('A')
         if (q.get('B')) hdata.B = q.get('B')
       } else {
-        hdata = JSON.parse(atob(decodeURIComponent(location.hash.slice(1))))
+        try {
+          hdata = JSON.parse(atob(decodeURIComponent(location.hash.slice(1))))
+        } catch (e) {
+          emitter.emit('error', new Error('failed to decode location.hash'))
+          console.error(e)
+          return
+        }
       }
       if (hdata.a) {
         for (var i = 0; i < state.algorithmList.length; i++) {
@@ -280,13 +325,32 @@ app.use(function (state, emitter) {
     }
   })
   emitter.on('calculate', function () {
-    var A = state.data.A = JSON.parse(state.input.A)
-    var B = state.data.B = JSON.parse(state.input.B)
+    emitter.emit('error:clear')
+    emitter.emit('props:clear')
+    emitter.emit('frame')
+    try {
+      var A = state.data.A = JSON.parse(state.input.A)
+    } catch (e) {
+      return emitter.emit('error', new Error('failed to parse A'))
+    }
+    try {
+      var B = state.data.B = JSON.parse(state.input.B)
+    } catch (e) {
+      return emitter.emit('error', new Error('failed to parse A'))
+    }
     var opts = null
     var clip = state.algorithms[state.selected.algorithm]
-    var C = state.selected.method === 'none'
-      ? []
-      : clip[state.selected.method](A, B)
+    try {
+      var C = state.selected.method === 'none'
+        ? []
+        : clip[state.selected.method](A, B)
+    } catch (e) {
+      return emitter.emit('error', e)
+    }
+    if (!Array.isArray(C)) {
+      return emitter.emit('error', new Error('result is not an array'))
+    }
+    C = fixDepth(C)
     var bbox = state.view.cartesian.viewbox = [Infinity,Infinity,-Infinity,-Infinity]
     var mA = toMulti(A), mB = toMulti(B)
     setSolid(state.props.solid[0], bbox, mA)
@@ -296,8 +360,8 @@ app.use(function (state, emitter) {
     setLine(state.props.line[1], mB)
     setLine(state.props.line[2], C)
     state.result = JSON.stringify(C)
+    state.resultElement.value = state.result
     emitter.emit('update-hash')
-    emitter.emit('render')
     emitter.emit('frame')
   })
 
@@ -358,6 +422,7 @@ app.use(function (state, emitter) {
 })
 
 app.route('*', function (state, emit) {
+  state.resultElement = html`<textarea oninput=${oninput('C')}>${state.result}</textarea>`
   return html`<body>
     <style>
       body {
@@ -428,6 +493,9 @@ app.route('*', function (state, emit) {
         padding-bottom: 1em;
         margin-right: 1ex;
       }
+      .inputs .errors {
+        margin-bottom: 1em;
+      }
       .toggle-inputs {
         position: absolute;
         left: 1ex;
@@ -461,6 +529,7 @@ app.route('*', function (state, emit) {
       </div>
     </div>
     <div class="inputs ${state.visible.inputs ? '' : 'hide'}">
+      ${state.errorElement}
       <div class="input A">
         <div class="label">A</div>
         <textarea oninput=${oninput('A')}>${state.input.A}</textarea>
@@ -471,7 +540,7 @@ app.route('*', function (state, emit) {
       </div>
       <div class="input C">
         <div class="label">C</div>
-        <textarea oninput=${oninput('C')}>${state.result}</textarea>
+        ${state.resultElement}
       </div>
     </div>
     <button class="toggle-inputs"
