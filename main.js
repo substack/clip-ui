@@ -163,6 +163,7 @@ app.use(function (state, emitter) {
   emitter.on('error', function (e) {
     state.errors.push(e)
     console.error(e)
+    if (e.hasOwnProperty('result')) console.error('result=',e.result)
     state.errorElement.appendChild(html`<div>${String(e)}</div>`)
     state.errorElement.classList.remove('hide')
   })
@@ -349,7 +350,9 @@ app.use(function (state, emitter) {
       return emitter.emit('error', e)
     }
     if (!Array.isArray(C)) {
-      return emitter.emit('error', new Error('result is not an array'))
+      var e = new Error('result is not an array')
+      e.result = C
+      return emitter.emit('error', e)
     }
     C = fixDepth(C)
     var bbox = state.view.cartesian.viewbox = [Infinity,Infinity,-Infinity,-Infinity]
