@@ -182,8 +182,7 @@ app.use(function (state, emitter) {
     { display: 'martinez', key: 'martinez' },
     { display: 'polygon-clipping', key: 'polygonClipping' },
   ].map(a => Object.assign(a, { pkg: algorithms[a.key].pkg }))
-
-  state.methods = ['union','intersect','difference','exclude','none']
+  state.methods = ['union','intersect','difference','exclude','divide','none']
   //state.views = ['globe','cylindrical','cartesian']
   state.views = ['cartesian']
   state.selected = {
@@ -343,9 +342,8 @@ app.use(function (state, emitter) {
     var opts = null
     var clip = state.algorithms[state.selected.algorithm]
     try {
-      var C = state.selected.method === 'none'
-        ? []
-        : clip[state.selected.method](A, B)
+      var f = clip[state.selected.method]
+      var C = typeof f !== 'function' ? [] : f(A, B)
     } catch (e) {
       return emitter.emit('error', e)
     }
@@ -483,6 +481,10 @@ app.route('*', function (state, emit) {
         background-color: purple;
         color: white;
       }
+      .options button.unavailable {
+        background-color: #777;
+        color: #ccc;
+      }
       .buttons {
         position: relative;
         z-index: 100;
@@ -544,7 +546,13 @@ app.route('*', function (state, emit) {
       </div>
       <div class="options">
         ${state.methods.map(m => html`<button
-          class=${state.selected.method === m ? 'selected' : ''}
+          class=${(function () {
+            var cs = []
+            if (state.selected.method === m) cs.push('selected')
+            var a = state.algorithms[state.selected.algorithm]
+            if (m !== 'none' && typeof a[m] !== 'function') cs.push('unavailable')
+            return cs.join(' ')
+          })()}
           onclick=${() => emit('set-method', m)}
         >${m}</button>`)}
       </div>
